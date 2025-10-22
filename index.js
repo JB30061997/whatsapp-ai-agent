@@ -29,7 +29,8 @@ const API_MIN_INTERVAL = parseInt(API_MIN_INTERVAL_MS, 10);
 const MAX_RETRIES = parseInt(API_MAX_RETRIES, 10);
 
 // 3️⃣ Clean Chrome Singleton locks (يعاون فـ macOS)
-const AUTH_DIR = path.join(process.cwd(), '.wwebjs_auth', `session-${SESSION_NAME}`);
+const STORAGE_ROOT = process.env.SESSION_STORAGE_PATH || '/data';
+const AUTH_DIR = path.join(STORAGE_ROOT, '.wwebjs_auth', `session-${SESSION_NAME}`);
 try {
   for (const f of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
     const p = path.join(AUTH_DIR, f);
@@ -59,20 +60,22 @@ try {
   console.error('❌ [BOOT] Endpoint build error:', e.message);
 }
 
-
-// 4️⃣ WhatsApp Client
 const client = new Client({
-  authStrategy: new LocalAuth({ clientId: SESSION_NAME }),
+  authStrategy: new LocalAuth({
+    clientId: SESSION_NAME,
+    dataPath: path.join(STORAGE_ROOT, '.wwebjs_auth'),
+  }),
   puppeteer: {
     executablePath: process.platform === 'darwin'
       ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
       : undefined,
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage']
   },
   takeoverOnConflict: true,
   takeoverTimeoutMs: 10_000
 });
+
 
 // 5️⃣ FS & Audio helpers
 function saveTemp(buffer, ext) {
