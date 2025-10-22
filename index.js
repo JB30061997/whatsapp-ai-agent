@@ -31,13 +31,34 @@ const MAX_RETRIES = parseInt(API_MAX_RETRIES, 10);
 // 3️⃣ Clean Chrome Singleton locks (يعاون فـ macOS)
 const AUTH_DIR = path.join(process.cwd(), '.wwebjs_auth', `session-${SESSION_NAME}`);
 try {
-  for (const f of ['SingletonLock','SingletonCookie','SingletonSocket']) {
+  for (const f of ['SingletonLock', 'SingletonCookie', 'SingletonSocket']) {
     const p = path.join(AUTH_DIR, f);
     if (fs.existsSync(p)) fs.unlinkSync(p);
   }
 } catch (e) {
   console.warn('⚠️ Could not clean Chrome Singleton locks:', e.message);
 }
+
+// ✅ يبني الـendpoint ديال Laravel بشكل سليم وكيطبعو فالـlogs
+function buildLaravelEndpoint() {
+  const base = String(process.env.LARAVEL_API_URL || '').trim();
+  if (!base) throw new Error('LARAVEL_API_URL is missing');
+
+  // حيد أي slashes فالأخر
+  const cleaned = base.replace(/\/+$/, '');
+  // إلى كانت القيمة أصلاً فيها /api/ai/route ما نزودوش مرة أخرى
+  if (/\/api\/ai\/route$/i.test(cleaned)) return cleaned;
+  return `${cleaned}/api/ai/route`;
+}
+
+// 🧪 sanity log فالانطلاقة
+try {
+  const ep = buildLaravelEndpoint();
+  console.log('🔗 [BOOT] Laravel endpoint resolved to:', ep);
+} catch (e) {
+  console.error('❌ [BOOT] Endpoint build error:', e.message);
+}
+
 
 // 4️⃣ WhatsApp Client
 const client = new Client({
@@ -129,25 +150,25 @@ async function synthesizeTTS(text) {
 // 6️⃣ NLP utils (dates + anchors + fallback)
 
 // Normalize (keep accents for months)
-function normKeepAccents(s){ return String(s||'').toLowerCase().normalize('NFKC').replace(/\s+/g,' ').trim(); }
+function normKeepAccents(s) { return String(s || '').toLowerCase().normalize('NFKC').replace(/\s+/g, ' ').trim(); }
 
 const FR_MONTHS = {
-  "janvier":1,"fevrier":2,"février":2,"mars":3,"avril":4,"mai":5,"juin":6,
-  "juillet":7,"aout":8,"août":8,"septembre":9,"octobre":10,"novembre":11,"decembre":12,"décembre":12
+  "janvier": 1, "fevrier": 2, "février": 2, "mars": 3, "avril": 4, "mai": 5, "juin": 6,
+  "juillet": 7, "aout": 8, "août": 8, "septembre": 9, "octobre": 10, "novembre": 11, "decembre": 12, "décembre": 12
 };
-const pad2 = n => String(n).padStart(2,'0');
+const pad2 = n => String(n).padStart(2, '0');
 
-function parseFrenchDatePhrase(fr){
-  if(!fr) return null;
-  let s = normKeepAccents(fr).replace(/\sle\s+/g,' ').trim();
+function parseFrenchDatePhrase(fr) {
+  if (!fr) return null;
+  let s = normKeepAccents(fr).replace(/\sle\s+/g, ' ').trim();
 
   // yyyy-mm-dd
-  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
   // dd-mm-yyyy | dd/mm/yyyy
-  if(/^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(s)){
+  if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(s)) {
     const sep = s.includes('/') ? '/' : '-';
-    let [d,m,y] = s.split(sep).map(v=>parseInt(v,10));
+    let [d, m, y] = s.split(sep).map(v => parseInt(v, 10));
     if (y < 100) y += 2000;
     return `${y}-${pad2(m)}-${pad2(d)}`;
   }
@@ -156,16 +177,16 @@ function parseFrenchDatePhrase(fr){
   const m = s.match(/\b(1er|premier|\d{1,2})\s+([a-zéûôîùàâç]+)\s+(\d{4})\b/i);
   if (m) {
     let d = m[1].toLowerCase();
-    d = (d==='1er'||d==='premier') ? '1' : d;
+    d = (d === '1er' || d === 'premier') ? '1' : d;
     const mo = FR_MONTHS[m[2].toLowerCase()];
-    const y  = parseInt(m[3],10);
-    if (mo) return `${y}-${pad2(mo)}-${pad2(parseInt(d,10))}`;
+    const y = parseInt(m[3], 10);
+    if (mo) return `${y}-${pad2(mo)}-${pad2(parseInt(d, 10))}`;
   }
   return null;
 }
 
 // ---- Anchors Parser (les / de / le, du ... au ...)
-function extractByAnchors(text){
+function extractByAnchors(text) {
   const t = normKeepAccents(text);
 
   // intent after "les"
@@ -182,7 +203,7 @@ function extractByAnchors(text){
   let gaine = null;
   const gaineM = t.match(/\bde\s+((?:gsb|gab|gl|gs)\s*-?\s*\d{1,5})\b/i);
   if (gaineM) {
-    const raw = gaineM[1].toLowerCase().replace(/[\s\-]/g,'');
+    const raw = gaineM[1].toLowerCase().replace(/[\s\-]/g, '');
     gaine = { type: 'prefix', value: raw }; // gsb11
   }
 
@@ -215,7 +236,7 @@ function detectIntent(t) {
 }
 function extractGaine(t) {
   const m = t.match(/\b(gs(?:b)?|gab|gl|gs)\s*-?\s*(\d{1,5})\b/i);
-  if (m) return { type:'prefix', value: `${m[1].toLowerCase()}${m[2]}` };
+  if (m) return { type: 'prefix', value: `${m[1].toLowerCase()}${m[2]}` };
   return null;
 }
 function extractTime(t) {
@@ -230,7 +251,7 @@ function extractTime(t) {
     const s = tokens[0];
     if (/^\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}$/.test(s)) {
       const sep = s.includes('/') ? '/' : '-';
-      let [d,m,y] = s.split(sep).map(v=>parseInt(v,10));
+      let [d, m, y] = s.split(sep).map(v => parseInt(v, 10));
       if (y < 100) y += 2000;
       return { date: `${y}-${pad2(m)}-${pad2(d)}` };
     }
@@ -340,9 +361,9 @@ function buildAudioPayload(text, phone) {
 
   // 3) Fallback keywords/regex
   const intent = detectIntent(text);
-  const gaine  = extractGaine(text);
-  const time   = extractTime(text);
-  return { mode:'audio_nlp', phone, intent, gaine, time };
+  const gaine = extractGaine(text);
+  const time = extractTime(text);
+  return { mode: 'audio_nlp', phone, intent, gaine, time };
 }
 
 // 9️⃣ Audio handler (No step-by-step)
@@ -352,7 +373,7 @@ async function handleAudioSmart(text, phone) {
   if (USE_LLM_ANCHORS) {
     const llm = await llmAnchorsParse(text);
     if (llm) {
-      payload = { mode:'audio_nlp', phone, intent: llm.intent, gaine: llm.gaine, time: llm.time || {} };
+      payload = { mode: 'audio_nlp', phone, intent: llm.intent, gaine: llm.gaine, time: llm.time || {} };
     }
   }
   // وإلا خذ المحلي
@@ -366,10 +387,23 @@ async function handleAudioSmart(text, phone) {
   }
 
   try {
-    const res = await axios.post(`${LARAVEL_API_URL}/api/ai/route`, payload, {
-      headers: { Authorization: `Bearer ${LARAVEL_API_TOKEN}` },
-      timeout: 20000
-    });
+    const endpoint = buildLaravelEndpoint();
+    console.log('🚀 [AUDIO] POST →', endpoint);
+    try {
+      const res = await axios.post(
+        endpoint,
+        payload,
+        { headers: { Authorization: `Bearer ${LARAVEL_API_TOKEN}` }, timeout: 20000 }
+      );
+      console.log('✅ [AUDIO] status:', res.status, '| type:', typeof res.data);
+      const reply = (res?.data?.reply || '').toString().trim();
+      return reply || "🤖 ماجات حتى استجابة واضحة من السيرفر.";
+    } catch (e) {
+      const st = e?.response?.status || e?.status;
+      const dataPreview = e?.response?.data ? JSON.stringify(e.response.data).slice(0, 300) : '';
+      console.error('❌ [AUDIO] Laravel error → status:', st, '| msg:', e.message, '| data:', dataPreview);
+      return "⚠️ كاين عطب مؤقت فالسيرفر. جرّب من بعد عفاك.";
+    }
     const reply = (res?.data?.reply || '').toString().trim();
     return reply || "🤖 ماجات حتى استجابة واضحة من السيرفر.";
   } catch (e) {
@@ -406,7 +440,7 @@ client.on('message', async (msg) => {
 
     // 🎙️ AUDIO FLOW (هنا فقط كنخدمو التعديلات؛ مسار النص ما بدّلناهش)
     if (isAudioLike) {
-      try { await msg.react('🎙️'); } catch (_) {}
+      try { await msg.react('🎙️'); } catch (_) { }
       const media = await msg.downloadMedia();
       if (media?.data) {
         const buffer = Buffer.from(media.data, 'base64');
@@ -417,7 +451,7 @@ client.on('message', async (msg) => {
           await ffmpegConvert(inPath, outPath);
           const transcript = await transcribeAudio(outPath);
           if (!transcript) {
-            try { await msg.reply('🕒 Service de transcription saturé, réessaie dans un moment.'); } catch(_) {}
+            try { await msg.reply('🕒 Service de transcription saturé, réessaie dans un moment.'); } catch (_) { }
             return;
           }
 
@@ -441,7 +475,7 @@ client.on('message', async (msg) => {
           return;
         } catch (e) {
           console.error('⚠️ Audio convert/transcribe error:', e.message);
-          try { await msg.reply('⚠️ Ma3rfnach ntratw l-audio daba. 7awel melli t9dar.'); } catch(_) {}
+          try { await msg.reply('⚠️ Ma3rfnach ntratw l-audio daba. 7awel melli t9dar.'); } catch (_) { }
           return;
         }
       }
@@ -451,15 +485,28 @@ client.on('message', async (msg) => {
     if (!text) return;
     let reply = 'OK.';
     try {
-      const res = await axios.post(
-        `${LARAVEL_API_URL}/api/ai/route`,
-        { text, phone },
-        { headers: { Authorization: `Bearer ${LARAVEL_API_TOKEN}` }, timeout: 15000 }
-      );
+      const endpoint = buildLaravelEndpoint();
+      console.log('🚀 [TEXT] POST →', endpoint, '| body:', { text, phone });
+      try {
+        const res = await axios.post(
+          endpoint,
+          { text, phone },
+          { headers: { Authorization: `Bearer ${LARAVEL_API_TOKEN}` }, timeout: 15000 }
+        );
+        console.log('✅ [TEXT] status:', res.status, '| type:', typeof res.data);
+        reply = (res?.data?.reply || '').toString().trim() || 'OK.';
+      } catch (e) {
+        const st = e?.response?.status || e?.status;
+        const dataPreview = e?.response?.data ? JSON.stringify(e.response.data).slice(0, 300) : '';
+        console.error('❌ [TEXT] Laravel error → status:', st, '| msg:', e.message, '| data:', dataPreview);
+        try { await msg.reply('🤖 Désolé, problème côté serveur. Réessaie un peu plus tard.'); } catch (_) { }
+        return;
+      }
+
       reply = (res?.data?.reply || '').toString().trim() || 'OK.';
     } catch (e) {
       console.error('⚠️ Laravel API error:', e.response?.status || e.message);
-      try { await msg.reply('🤖 Désolé, problème côté serveur. Réessaie un peu plus tard.'); } catch(_) {}
+      try { await msg.reply('🤖 Désolé, problème côté serveur. Réessaie un peu plus tard.'); } catch (_) { }
       return;
     }
 
@@ -467,7 +514,7 @@ client.on('message', async (msg) => {
     console.log(`💬 Text → ${phone}`);
   } catch (err) {
     console.error('⚠️ Agent error (global):', err.message);
-    try { await msg.reply('🤖 Erreur inattendue.'); } catch (_) {}
+    try { await msg.reply('🤖 Erreur inattendue.'); } catch (_) { }
   }
 });
 
