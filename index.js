@@ -407,9 +407,6 @@ async function handleAudioSmart(text, phone) {
       console.error('⚠️ Laravel (audio_nlp) error:', e.response?.status || e.message);
       return "⚠️ كاين عطب مؤقت فالسيرفر. جرّب من بعد عفاك.";
     }
-
-    const reply = (res?.data?.reply || '').toString().trim();
-    return reply || "🤖 ماجات حتى استجابة واضحة من السيرفر.";
   } catch (e) {
     console.error('⚠️ Laravel (audio_nlp) error:', e.response?.status || e.message);
     return "⚠️ كاين عطب مؤقت فالسيرفر. جرّب من بعد عفاك.";
@@ -507,9 +504,6 @@ client.on('message', async (msg) => {
         try { await msg.reply('🤖 Désolé, problème côté serveur. Réessaie un peu plus tard.'); } catch (_) { }
         return;
       }
-
-
-      reply = (res?.data?.reply || '').toString().trim() || 'OK.';
     } catch (e) {
       console.error('⚠️ Laravel API error:', e.response?.status || e.message);
       try { await msg.reply('🤖 Désolé, problème côté serveur. Réessaie un peu plus tard.'); } catch (_) { }
