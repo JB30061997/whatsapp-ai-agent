@@ -494,6 +494,8 @@ client.on('message', async (msg) => {
           { headers: { Authorization: `Bearer ${LARAVEL_API_TOKEN}` }, timeout: 15000 }
         );
         console.log('✅ [TEXT] status:', res.status, '| type:', typeof res.data);
+        console.log('📦 Laravel response preview:', JSON.stringify(res.data).slice(0, 300));
+
         reply = (res?.data?.reply || '').toString().trim() || 'OK.';
       } catch (e) {
         const st = e?.response?.status || e?.status;
