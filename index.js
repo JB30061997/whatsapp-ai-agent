@@ -70,7 +70,7 @@ const client = new Client({
       ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
       : undefined,
     headless: true,
-    args: ['--no-sandbox','--disable-setuid-sandbox','--disable-dev-shm-usage']
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   },
   takeoverOnConflict: true,
   takeoverTimeoutMs: 10_000
@@ -393,20 +393,21 @@ async function handleAudioSmart(text, phone) {
     const endpoint = buildLaravelEndpoint();
     console.log('🚀 [AUDIO] POST →', endpoint);
     try {
-      const res = await axios.post(
-        endpoint,
-        payload,
-        { headers: { Authorization: `Bearer ${LARAVEL_API_TOKEN}` }, timeout: 20000 }
-      );
-      console.log('✅ [AUDIO] status:', res.status, '| type:', typeof res.data);
-      const reply = (res?.data?.reply || '').toString().trim();
+      const axiosRes = await axios.post(`${LARAVEL_API_URL}/api/ai/route`, payload, {
+        headers: { Authorization: `Bearer ${LARAVEL_API_TOKEN}` },
+        timeout: 20000
+      });
+
+      console.log(`✅ [AUDIO] status: ${axiosRes.status} | type: ${typeof axiosRes.data}`);
+      console.log('📦 [AUDIO] Laravel response preview:', JSON.stringify(axiosRes.data).slice(0, 300));
+
+      const reply = (axiosRes?.data?.reply || '').toString().trim();
       return reply || "🤖 ماجات حتى استجابة واضحة من السيرفر.";
     } catch (e) {
-      const st = e?.response?.status || e?.status;
-      const dataPreview = e?.response?.data ? JSON.stringify(e.response.data).slice(0, 300) : '';
-      console.error('❌ [AUDIO] Laravel error → status:', st, '| msg:', e.message, '| data:', dataPreview);
+      console.error('⚠️ Laravel (audio_nlp) error:', e.response?.status || e.message);
       return "⚠️ كاين عطب مؤقت فالسيرفر. جرّب من بعد عفاك.";
     }
+
     const reply = (res?.data?.reply || '').toString().trim();
     return reply || "🤖 ماجات حتى استجابة واضحة من السيرفر.";
   } catch (e) {
@@ -491,22 +492,22 @@ client.on('message', async (msg) => {
       const endpoint = buildLaravelEndpoint();
       console.log('🚀 [TEXT] POST →', endpoint, '| body:', { text, phone });
       try {
-        const res = await axios.post(
-          endpoint,
+        const axiosRes = await axios.post(
+          `${LARAVEL_API_URL}/api/ai/route`,
           { text, phone },
           { headers: { Authorization: `Bearer ${LARAVEL_API_TOKEN}` }, timeout: 15000 }
         );
-        console.log('✅ [TEXT] status:', res.status, '| type:', typeof res.data);
-        console.log('📦 Laravel response preview:', JSON.stringify(res.data).slice(0, 300));
 
-        reply = (res?.data?.reply || '').toString().trim() || 'OK.';
+        console.log(`✅ [TEXT] status: ${axiosRes.status} | type: ${typeof axiosRes.data}`);
+        console.log('📦 [TEXT] Laravel response preview:', JSON.stringify(axiosRes.data).slice(0, 300));
+
+        reply = (axiosRes?.data?.reply || '').toString().trim() || 'OK.';
       } catch (e) {
-        const st = e?.response?.status || e?.status;
-        const dataPreview = e?.response?.data ? JSON.stringify(e.response.data).slice(0, 300) : '';
-        console.error('❌ [TEXT] Laravel error → status:', st, '| msg:', e.message, '| data:', dataPreview);
+        console.error('⚠️ Laravel API error:', e.response?.status || e.message);
         try { await msg.reply('🤖 Désolé, problème côté serveur. Réessaie un peu plus tard.'); } catch (_) { }
         return;
       }
+
 
       reply = (res?.data?.reply || '').toString().trim() || 'OK.';
     } catch (e) {
