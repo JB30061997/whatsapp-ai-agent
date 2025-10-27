@@ -28,7 +28,7 @@ const USE_LLM_ANCHORS = ENABLE_LLM_ANCHORS === 'true';
 const API_MIN_INTERVAL = parseInt(API_MIN_INTERVAL_MS, 10);
 const MAX_RETRIES = parseInt(API_MAX_RETRIES, 10);
 
-// 3️⃣ Clean Chrome Singleton locks (يعاون فـ macOS)
+// 3️⃣ Clean Chrome Singleton locks (aide sur macOS)
 const STORAGE_ROOT = process.env.SESSION_STORAGE_PATH || '/data';
 const AUTH_DIR = path.join(STORAGE_ROOT, '.wwebjs_auth', `session-${SESSION_NAME}`);
 try {
@@ -40,19 +40,19 @@ try {
   console.warn('⚠️ Could not clean Chrome Singleton locks:', e.message);
 }
 
-// ✅ يبني الـendpoint ديال Laravel بشكل سليم وكيطبعو فالـlogs
+// ✅ Construit correctement l'endpoint Laravel et l'affiche dans les logs
 function buildLaravelEndpoint() {
   const base = String(process.env.LARAVEL_API_URL || '').trim();
   if (!base) throw new Error('LARAVEL_API_URL is missing');
 
-  // حيد أي slashes فالأخر
+  // Supprimer les slashes de fin
   const cleaned = base.replace(/\/+$/, '');
-  // إلى كانت القيمة أصلاً فيها /api/ai/route ما نزودوش مرة أخرى
+  // Si la valeur contient déjà /api/ai/route ne pas le rajouter
   if (/\/api\/ai\/route$/i.test(cleaned)) return cleaned;
   return `${cleaned}/api/ai/route`;
 }
 
-// 🧪 sanity log فالانطلاقة
+// 🧪 sanity log au démarrage
 try {
   const ep = buildLaravelEndpoint();
   console.log('🔗 [BOOT] Laravel endpoint resolved to:', ep);
@@ -75,7 +75,6 @@ const client = new Client({
   takeoverOnConflict: true,
   takeoverTimeoutMs: 10_000
 });
-
 
 // 5️⃣ FS & Audio helpers
 function saveTemp(buffer, ext) {
@@ -263,7 +262,7 @@ function extractTime(t) {
   return {};
 }
 
-// ---- Normalizers (للـLLM)
+// ---- Normalizers (pour le LLM)
 function normalizeGaineValue(v) {
   if (!v) return null;
   const s = String(v).toLowerCase().replace(/\s|-/g, '');
@@ -294,7 +293,7 @@ function normalizeTime(t) {
   return {};
 }
 
-// 7️⃣ LLM Anchors Parser (اختياري)
+// 7️⃣ LLM Anchors Parser (optionnel)
 async function llmAnchorsParse(text) {
   if (!USE_LLM_ANCHORS) return null;
   try {
@@ -346,11 +345,11 @@ async function llmAnchorsParse(text) {
 
 // 8️⃣ Build payload (Audio only)
 function buildAudioPayload(text, phone) {
-  // 1) جرّب LLM (إذا مفعل)
+  // 1) Essayer le LLM (si activé)
   const useLLM = { ok: false, data: null };
-  // note: llmAnchorsParse async → هنديروه فـ handleAudioSmart (باش نستناوه)
+  // note : llmAnchorsParse est async → on le fait dans handleAudioSmart (pour attendre le résultat)
 
-  // 2) Anchors محلي
+  // 2) Ancres locales
   const anchored = extractByAnchors(text);
   if (anchored) {
     return {
@@ -371,7 +370,7 @@ function buildAudioPayload(text, phone) {
 
 // 9️⃣ Audio handler (No step-by-step)
 async function handleAudioSmart(text, phone) {
-  // حاول أولاً LLM إلى كان مفعّل
+  // Essayer d'abord le LLM s'il est activé
   let payload;
   if (USE_LLM_ANCHORS) {
     const llm = await llmAnchorsParse(text);
@@ -379,14 +378,14 @@ async function handleAudioSmart(text, phone) {
       payload = { mode: 'audio_nlp', phone, intent: llm.intent, gaine: llm.gaine, time: llm.time || {} };
     }
   }
-  // وإلا خذ المحلي
+  // sinon utiliser l'extraction locale
   if (!payload) payload = buildAudioPayload(text, phone);
 
   if (!payload.intent) {
-    return "🎯 حدّد واش بغيتي *Entrées* ولا *Sorties* ولا *Stock* (مثال: «les sorties de gsb11 le 01-10-2025»).";
+    return "🎯 Précise si tu veux *Entrées*, *Sorties* ou *Stock* (ex : «les sorties de gsb11 le 01-10-2025»).";
   }
   if (!payload.gaine) {
-    return "🧵 عطيني الڭاين بهاذ الشكل: *gsb11* / *gab22* / *gl90* (غير أرقام بعد البادئة).";
+    return "🧵 Donne-moi la gaine sous cette forme : *gsb11* / *gab22* / *gl90* (uniquement des chiffres après le préfixe).";
   }
 
   try {
@@ -402,14 +401,14 @@ async function handleAudioSmart(text, phone) {
       console.log('📦 [AUDIO] Laravel response preview:', JSON.stringify(axiosRes.data).slice(0, 300));
 
       const reply = (axiosRes?.data?.reply || '').toString().trim();
-      return reply || "🤖 ماجات حتى استجابة واضحة من السيرفر.";
+      return reply || "🤖 Aucune réponse claire du serveur.";
     } catch (e) {
       console.error('⚠️ Laravel (audio_nlp) error:', e.response?.status || e.message);
-      return "⚠️ كاين عطب مؤقت فالسيرفر. جرّب من بعد عفاك.";
+      return "⚠️ Panne temporaire côté serveur. Réessaie un peu plus tard, stp.";
     }
   } catch (e) {
     console.error('⚠️ Laravel (audio_nlp) error:', e.response?.status || e.message);
-    return "⚠️ كاين عطب مؤقت فالسيرفر. جرّب من بعد عفاك.";
+    return "⚠️ Panne temporaire côté serveur. Réessaie un peu plus tard, stp.";
   }
 }
 
@@ -439,7 +438,7 @@ client.on('message', async (msg) => {
     let text = (msg.body || '').trim();
     const isAudioLike = msg.hasMedia && (msg.type === 'ptt' || msg.type === 'audio' || msg.type === 'voice');
 
-    // 🎙️ AUDIO FLOW (هنا فقط كنخدمو التعديلات؛ مسار النص ما بدّلناهش)
+    // 🎙️ AUDIO FLOW (ici on applique seulement les modifications ; le flux texte n'a pas été changé)
     if (isAudioLike) {
       try { await msg.react('🎙️'); } catch (_) { }
       const media = await msg.downloadMedia();
@@ -458,7 +457,7 @@ client.on('message', async (msg) => {
 
           const smartReply = await handleAudioSmart(transcript, phone);
 
-          // احترام القاعدة: audio in → text out (ولا TTS إلا بغيتي)
+          // Règle: audio in → texte out (TTS seulement si tu le veux)
           const mustForceText = FORCE_TEXT_ON_AUDIO_BOOL;
           if (!mustForceText && ENABLE_TTS_BOOL) {
             const voicePath = await synthesizeTTS(smartReply);
@@ -476,13 +475,13 @@ client.on('message', async (msg) => {
           return;
         } catch (e) {
           console.error('⚠️ Audio convert/transcribe error:', e.message);
-          try { await msg.reply('⚠️ Ma3rfnach ntratw l-audio daba. 7awel melli t9dar.'); } catch (_) { }
+          try { await msg.reply("⚠️ Impossible de traiter l'audio pour le moment. Réessaie dès que possible."); } catch (_) { }
           return;
         }
       }
     }
 
-    // 💬 TEXT FLOW (بلا تغيير — خليه كيف كان)
+    // 💬 TEXT FLOW (sans changement — on le laisse tel quel)
     if (!text) return;
     let reply = 'OK.';
     try {
